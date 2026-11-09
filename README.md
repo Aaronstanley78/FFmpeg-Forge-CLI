@@ -2,7 +2,7 @@
 
 The conversion engine of **FFmpeg Forge 2.3.0**, on the command line. One small `forge.exe`
 drives FFmpeg with the same presets, filters, upscalers, HDR, spatial audio, AI engines and
-DVD / Blu-ray ripper as the FFmpeg Forge window — scriptable, batchable, no GUI.
+DVD / Blu-ray ripper as the FFmpeg Forge window scriptable, batchable, no GUI.
 
 ```text
 forge movie.mkv -f mp4
