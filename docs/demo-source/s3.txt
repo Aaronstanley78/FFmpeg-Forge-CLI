@@ -1,0 +1,7 @@
+Reading DVD D:\Discs\HOLIDAYS_2025…
+DVD "HOLIDAYS_2025" — 1 title(s)
+ * Title 01            2:30  4 ch.  MPEG-2 720×576
+        audio 1: Français · Dolby Digital stereo
+        audio 2: English · Dolby Digital stereo
+        subs  1: Français · DVD subtitles
+(* = longest title, ripped by default)

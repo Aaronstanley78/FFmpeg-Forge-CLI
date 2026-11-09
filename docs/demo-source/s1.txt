@@ -1,0 +1,15 @@
+FFmpeg Forge CLI 1.0.0  (engine 2.3.0)
+  [ok] FFmpeg          9.0.2-full_build-www.gyan.dev  —  D:\FFmpegForge-CLI\bin\ffmpeg.exe
+  [ok] FFprobe         D:\FFmpegForge-CLI\bin\ffprobe.exe
+  [ok] Forge folder    D:\FFmpegForge-CLI\  (portable, settings in D:\FFmpegForge-CLI\Settings)
+  [ok] dovi_tool       D:\FFmpegForge-CLI\dovi_tool.exe
+  [ok] ForgeRTX        D:\FFmpegForge-CLI\ForgeRTX.exe
+  [--] RazorNext       RazorNext model not installed yet: run  forge install razornext (about 15 GB with PyTorch). No Visual Enhancer needed.
+  [--] VisionNext      VisionNext model not installed yet: run  forge install visionnext (about 10 GB with PyTorch). No Visual Enhancer needed.
+  [--] Visual Enhancer not found (optional, --ve-dir)
+  [--] SeedVR2         SeedVR2 is not installed: run  forge install seedvr2 (≈ 4 GB download) or choose an existing folder.
+  [--] AI denoiser     not installed (forge install ai)
+  [--] QTGMC           not installed — bwdif is used (forge install qtgmc)
+  [ok] Formats         184 muxers, 237 encoders
+  [ok] DVD / Blu-ray   dvdvideo ✓  libbluray ✓
+  [ok] GPU scaling     libplacebo (Vulkan) ✓

@@ -1,0 +1,17 @@
+Reading DVD D:\Discs\HOLIDAYS_2025…
+DVD "HOLIDAYS_2025" — 1 title(s)
+ * Title 01            2:30  4 ch.  MPEG-2 720×576
+Title 01 (2:30) → D:\Videos\HOLIDAYS_2025 - Title 01.mp4
+   MP4 cannot store DVD / Blu-ray picture subtitles: they are left out (choose MKV, or burn one into the picture).
+   0 %
+   10 %
+   20 %
+   30 %
+   40 %
+   50 %
+   60 %
+   70 %
+   80 %
+   90 %
+   100 %
+   ✓ 2:05 — 37.6 MB
