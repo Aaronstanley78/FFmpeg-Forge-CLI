@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Build forge.exe with Mono (Linux / macOS): sudo apt install mono-mcs   — the .exe runs on Windows (.NET 4) and with Mono.
+cd "$(dirname "$0")"
+OUT="${OUT:-forge.exe}"
+mcs -nologo -target:exe -optimize+ -langversion:5 -sdk:4.5 -win32icon:src/app.ico -out:"$OUT" -resource:shaders/FSR.glsl,FSR.glsl -resource:shaders/NIS.glsl,NIS.glsl -resource:shaders/SGSR.glsl,SGSR.glsl -resource:shaders/Anime4K.glsl,Anime4K.glsl -resource:shaders/OptiScaler.glsl,OptiScaler.glsl -resource:shaders/FSR2.glsl,FSR2.glsl -resource:src/hrir_ircam.bin,hrir_ircam.bin -resource:aidenoise/forge_ai_denoise.py,forge_ai_denoise.py -resource:aidenoise/network_scunet.py,network_scunet.py -resource:aidenoise/LICENSE-SCUNet.txt,LICENSE-SCUNet.txt -resource:aidenoise/forge_visionnext.py,forge_visionnext.py -resource:aidenoise/forge_custom_ai.py,forge_custom_ai.py -resource:aidenoise/forge_razornext.py,forge_razornext.py -resource:qtgmc/forge_qtgmc.py,forge_qtgmc.py -r:System.Windows.Forms.dll -r:System.Drawing.dll src/*.cs cli/*.cs && echo "OK: $OUT"
