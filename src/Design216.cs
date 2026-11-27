@@ -62,19 +62,35 @@ namespace FFmpegForge
         }
     }
 
-    /// Section title with a gold icon (OUTPUT FORMAT, SCALE, SEEDVR2…).
+    /// Section title: cyan icon tile + title; for workflow stages (Scale, Denoiser, Deblurring, AI Upscale…) a switch on the
+    /// right mirrors the section's main checkbox (3.0 "stage card" design).
     public class SectionHeader : Control
     {
         public string IconName;
+        CheckBox toggle;
+        /// The section's main checkbox: the header shows a switch bound to it.
+        public CheckBox Toggle
+        {
+            get { return toggle; }
+            set { toggle = value; if (toggle != null) toggle.CheckedChanged += (s, e) => Invalidate(); Cursor = toggle != null ? Cursors.Hand : Cursors.Default; Invalidate(); }
+        }
         public SectionHeader(string text, string icon)
         {
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.ResizeRedraw | ControlStyles.SupportsTransparentBackColor, true);
             Text = text; IconName = icon;
-            Font = new Font("Segoe UI Semibold", 10.5f);
-            ForeColor = Theme.Gold;
+            Font = new Font("Segoe UI Semibold", 9.75f);
+            ForeColor = Theme.Text;
             BackColor = Color.Transparent;
             Height = Theme.S(34);
             Dock = DockStyle.Fill;
+        }
+
+        RectangleF SwitchRect { get { int w = Theme.S(38), h = Theme.S(20); return new RectangleF(Width - w - Theme.S(2), (Height - h) / 2f, w, h); } }
+
+        protected override void OnMouseClick(MouseEventArgs e)
+        {
+            base.OnMouseClick(e);
+            if (toggle != null && toggle.Enabled && e.Button == MouseButtons.Left) toggle.Checked = !toggle.Checked;
         }
 
         protected override void OnTextChanged(EventArgs e) { base.OnTextChanged(e); Invalidate(); }
@@ -94,9 +110,11 @@ namespace FFmpegForge
             if (t.StartsWith("FILTER")) return "funnel";
             if (t.StartsWith("TRIM")) return "scissors";
             if (t.StartsWith("DESTINATION")) return "folder";
-            if (t.Contains("VISIONNEXT")) return "cube";
+            if (t.Contains("VISIONNEXT") || t.StartsWith("AI UPSCALE")) return "cube";
             if (t.StartsWith("PYTHON")) return "code";
             if (t.StartsWith("SEEDVR2")) return "sparkle";
+            if (t.StartsWith("LTX")) return "film";
+            if (t.StartsWith("DEBLUR")) return "frame";
             if (t.Contains("SPATIAL")) return "speaker";
             return "dot";
         }
@@ -106,10 +124,32 @@ namespace FFmpegForge
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-            int isz = Theme.S(22);
-            Icons.Draw(g, IconName, new RectangleF(0, (Height - isz) / 2f, isz, isz), Theme.Gold);
-            TextRenderer.DrawText(g, Text, Font, new Rectangle(isz + Theme.S(14), 0, Width - isz - Theme.S(14), Height), ForeColor,
+            int tile = Theme.S(26), isz = Theme.S(16);
+            var tr = new RectangleF(0, (Height - tile) / 2f, tile, tile);
+            bool on = toggle != null && toggle.Checked;
+            using (var p = Theme.Round(tr, Theme.S(6)))
+            {
+                using (var b = new SolidBrush(toggle == null || on ? Theme.AccentMuted : Theme.Card)) g.FillPath(b, p);
+                using (var pen = new Pen(toggle == null || on ? Color.FromArgb(110, Theme.Cyan) : Theme.Border)) g.DrawPath(pen, p);
+            }
+            Icons.Draw(g, IconName, new RectangleF(tr.X + (tile - isz) / 2f, tr.Y + (tile - isz) / 2f, isz, isz), toggle == null || on ? Theme.Cyan : Theme.Muted);
+            int tx = tile + Theme.S(12);
+            int tw = Width - tx - (toggle != null ? Theme.S(50) : 0);
+            TextRenderer.DrawText(g, Text, Font, new Rectangle(tx, 0, Math.Max(10, tw), Height), toggle == null || on ? ForeColor : Color.FromArgb(196, 201, 210),
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            if (toggle != null)
+            {
+                var sr = SwitchRect;
+                using (var p = Theme.Round(sr, sr.Height / 2f))
+                {
+                    if (on) using (var b = Theme.AccentBrush(sr)) g.FillPath(b, p);
+                    else using (var b = new SolidBrush(Theme.Card)) g.FillPath(b, p);
+                    using (var pen = new Pen(on ? Color.FromArgb(120, 255, 255, 255) : Theme.Border)) g.DrawPath(pen, p);
+                }
+                float d = sr.Height - Theme.S(6);
+                float kx = on ? sr.Right - d - Theme.S(3) : sr.X + Theme.S(3);
+                using (var b = new SolidBrush(on ? Color.White : Color.FromArgb(130, 136, 146))) g.FillEllipse(b, kx, sr.Y + Theme.S(3), d, d);
+            }
         }
     }
 

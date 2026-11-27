@@ -484,7 +484,7 @@ namespace FFmpegForge
             // expression row
             var exprRow = new Panel { Dock = DockStyle.Bottom, Height = Theme.S(92), BackColor = Theme.Bg, Padding = new Padding(0, Theme.S(8), 0, 0) };
             var exprTitle = new Label { Text = "FILTER EXPRESSION  (editable — you can also type any raw filter here)", Dock = DockStyle.Top, Height = Theme.S(22), ForeColor = Theme.Accent1, Font = fSec };
-            exprBox = new TextBox { Dock = DockStyle.Fill, Multiline = true, BackColor = Theme.Card, ForeColor = Color.FromArgb(255, 214, 140), BorderStyle = BorderStyle.FixedSingle, Font = fMono, ScrollBars = ScrollBars.Vertical };
+            exprBox = new TextBox { Dock = DockStyle.Fill, Multiline = true, BackColor = Theme.Card, ForeColor = Color.FromArgb(165, 243, 252), BorderStyle = BorderStyle.FixedSingle, Font = fMono, ScrollBars = ScrollBars.Vertical };
             var kindHost = new Panel { Dock = DockStyle.Right, Width = Theme.S(170), BackColor = Theme.Bg, Padding = new Padding(Theme.S(10), 0, 0, 0) };
             kindLbl = new Label { Text = "Apply to", Dock = DockStyle.Top, Height = Theme.S(20), ForeColor = Theme.Muted, Font = fSmall };
             cbKind = new ComboBox { Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = Theme.Card, ForeColor = Theme.Text };

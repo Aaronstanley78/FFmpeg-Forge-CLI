@@ -89,6 +89,8 @@ namespace FFmpegForge
         public string VsrExpr, HdrExpr, DlssExpr;     // custom expressions from the parameter editor
         public string RtxEnginePref = "auto";         // auto | native | processor
         public SeedSettings Seed = new SeedSettings();
+        public LtxSettings Ltx = new LtxSettings();        // 2.4.1: LTX 2.5 Upscale (WanGP)
+        public bool LtxOn { get { return Ltx != null && Ltx.Enabled; } }
         public ConvSettings Clone() { return (ConvSettings)MemberwiseClone(); }
         public bool SourceDsd;        // filled per job: the audio is DSD (decoded by FFmpeg at DSD rate / 8, -6 dB)
         public int DsdTargetRate;     // PCM rate used for DSD sources (0 = automatic)
@@ -120,6 +122,7 @@ namespace FFmpegForge
         public bool CaiEnabled, CaiKeep, CaiFp32, CaiGpu = true;
         public string CaiModel;
         public int CaiTile;
+        public bool DeblurEnabled; public int DeblurStrength = 100;   // 3.0: Deblurring (FocusPulsar, Visual Enhancer)
         public string DnModel = "scunet";      // Denoiser IA model: "scunet" (built-in) or a model file name (models\*.pth, run by spandrel)
         public int DnPreset, DnEngine, DnStrength = 100, DnSharpen = 20;
         public bool OptiEnabled;

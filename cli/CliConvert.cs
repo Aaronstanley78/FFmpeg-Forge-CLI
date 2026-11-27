@@ -229,13 +229,40 @@ namespace FFmpegForge.CommandLine
             if (upm != null && kind != MediaKind.Audio)
             {
                 upm = upm.ToLowerInvariant();
-                if (upm != "razornext" && upm != "visionnext") throw new UsageException("--upscale: razornext or visionnext");
+                if (upm != "razornext" && upm != "visionnext" && upm != "optipulsar") throw new UsageException("--upscale: razornext, visionnext or optipulsar");
                 var v = s.Vision; v.Enabled = true; v.Model = upm;
                 v.Scale = a.Int("upscale-factor", upm == "razornext" ? 4 : 2);
                 int eng = Pick(a.Get("upscale-engine"), "upscale-engine", "builtin|built-in", "ve|visual-enhancer"); v.Engine = Math.Max(0, eng);
                 v.UseGpu = !a.Has("cpu");
                 v.Tile = a.Int("tile", 512);
                 v.MemBudget = a.Get("memory-budget", "auto");
+            }
+
+            // ---------- 2.0: Deblurring (FocusPulsar, through Visual Enhancer) ----------
+            if (a.Has("deblur") && kind != MediaKind.Audio)
+            {
+                s.DeblurEnabled = true;
+                s.DeblurStrength = Math.Max(0, Math.Min(200, a.Int("deblur-strength", 100)));
+            }
+            else if (a.Has("deblur-strength")) throw new UsageException("--deblur-strength needs --deblur.");
+
+            // ---------- 2.0: LTX 2.5 Upscale (WanGP Video Postprocessing) ----------
+            string ltx = a.Get("ltx");
+            if (ltx != null && kind != MediaKind.Audio)
+            {
+                ltx = ltx.ToLowerInvariant();
+                var L = s.Ltx; L.Enabled = true;
+                if (ltx == "upscaler" || ltx == "ltx25" || ltx == "1") L.Method = "ltx25";
+                else if (ltx == "refiner" || ltx == "refine" || ltx == "ltx25_refine") L.Method = "ltx25_refine";
+                else throw new UsageException("--ltx: upscaler (Pixel Spatial Upscaler x2) or refiner (Detail Refiner x1 / x1.5 / x2)");
+                L.Scale = L.Method == "ltx25" ? 2 : a.Dbl("ltx-factor", 2);
+                if (L.Method == "ltx25_refine" && !LtxEngine.Scales.Contains(L.Scale)) throw new UsageException("--ltx-factor: 1, 1.5 or 2");
+                L.Prompt = a.Get("ltx-prompt", "");
+                L.Profile = a.Get("ltx-profile", "4");
+                if (!LtxEngine.Profiles.Contains(L.Profile)) throw new UsageException("--ltx-profile: " + string.Join(", ", LtxEngine.Profiles));
+                L.Attention = a.Get("ltx-attention", "sdpa");
+                if (!LtxEngine.Attentions.Contains(L.Attention)) throw new UsageException("--ltx-attention: " + string.Join(", ", LtxEngine.Attentions));
+                L.Seed = a.Int("ltx-seed", -1);
             }
 
             // ---------- SeedVR2 ----------
@@ -317,6 +344,7 @@ namespace FFmpegForge.CommandLine
         {
             bool srcVideo = j.Kind == MediaKind.Video || CommandBuilder.IsAnimatedImageSource(j);
             if (s.Seed != null && s.Seed.Enabled) return false;
+            if (s.LtxOn) return false;
             if (s.Vision != null && s.Vision.Enabled) return false;
             return s.Format.Kind == MediaKind.Image && srcVideo && s.ExtractMode != 0;
         }
@@ -339,6 +367,8 @@ namespace FFmpegForge.CommandLine
             { var vp = VisionEngine.Build(job, s, outPath, out err); expected = vp != null ? vp.Expected : 0; args = vp != null ? vp.Text() : null; return vp != null; }
             if (s.Seed != null && s.Seed.Enabled && s.Format.Kind != MediaKind.Audio)
             { var sp = SeedEngine.Build(job, s, outPath, out err); expected = sp != null ? sp.Expected : 0; args = sp != null ? sp.Text() : null; return sp != null; }
+            if (s.LtxOn && s.Format.Kind != MediaKind.Audio)
+            { var lp = LtxEngine.Build(job, s, outPath, out err); expected = lp != null ? lp.Expected : 0; args = lp != null ? lp.Text() : null; return lp != null; }
             if (s.Format.Kind == MediaKind.Image && s.RtxVsr)
             {
                 if (!Rtx.HasDriver) { err = "NVIDIA RTX Video for pictures needs ForgeRTX.exe next to forge.exe."; args = null; expected = 0; return false; }
@@ -449,12 +479,13 @@ namespace FFmpegForge.CommandLine
         {
             if (string.IsNullOrWhiteSpace(l) || DiscScanner.Noise(l)) return;
             if (l.Contains("Guessed Channel Layout") || l.Contains("deprecated pixel format") || l.Contains("Last message repeated")) return;
-            if (!verbose && !(l.StartsWith("Forge") || l.StartsWith("SeedVR2") || l.StartsWith("VisionNext") || l.StartsWith("RazorNext") || l.IndexOf("error", StringComparison.OrdinalIgnoreCase) >= 0 || l.IndexOf("warning", StringComparison.OrdinalIgnoreCase) >= 0)) return;
+            if (!verbose && !(l.StartsWith("Forge") || l.StartsWith("SeedVR2") || l.StartsWith("VisionNext") || l.StartsWith("RazorNext") || l.StartsWith("OptiPulsar") || l.StartsWith("FocusPulsar") || l.StartsWith("LTX 2.5") || l.StartsWith("FORGE_ERROR") || l.IndexOf("error", StringComparison.OrdinalIgnoreCase) >= 0 || l.IndexOf("warning", StringComparison.OrdinalIgnoreCase) >= 0)) return;
             Dim("     " + l.Trim());
         }
 
-        /// The conversion pipeline of the window (FFmpeg Forge 2.3.0): deinterlacing → AI denoiser → Python / ONNX model →
-        /// final engine (DSD, VisionNext / RazorNext, SeedVR2, RTX, FFmpeg) → image sequence → Dolby Vision → cover.
+        /// The conversion pipeline of the window (FFmpeg Forge 3.0.1): deinterlacing → AI denoiser → Deblurring (FocusPulsar) →
+        /// Python / ONNX model → final engine (DSD, VisionNext / RazorNext / OptiPulsar, SeedVR2, LTX 2.5, RTX, FFmpeg) →
+        /// image sequence → Dolby Vision → cover.
         static int ConvertOne(Job job, ConvSettings s, ConvSettings sUser, int seqKind, bool seqHi, string outFile, bool aiOff, out string outPath, out string lastErr)
         {
             lastErr = null;
@@ -491,6 +522,7 @@ namespace FFmpegForge.CommandLine
             var bar = new Progress(Path.GetFileName(job.Path));
             Action<double, double, double> prog = (b, sc, p) => bar.Report(b + sc * p);
             AiDenoise.Stage diStage = null, aiStage = null, caiStage = null;
+            VeFx.Stage veStage = null;
             bool srcHasPicture = job.Kind == MediaKind.Video || job.Kind == MediaKind.Image || CommandBuilder.IsAnimatedImageSource(job);
             Action<string> log = l => { bar.Break(); LogLine(l); };
             try
@@ -502,7 +534,7 @@ namespace FFmpegForge.CommandLine
                 {
                     bool q = Qtgmc.Ready;
                     string ordTxt = Qtgmc.OrderText(job, s);
-                    bool plainPath = !q && !(s.Vision != null && s.Vision.Enabled) && !(s.Seed != null && s.Seed.Enabled) && !s.RtxActive && !s.DnEnabled && !s.CaiEnabled && s.Rotate == 0 && string.IsNullOrWhiteSpace(s.FilterComplex);
+                    bool plainPath = !q && !(s.Vision != null && s.Vision.Enabled) && !(s.Seed != null && s.Seed.Enabled) && !s.LtxOn && !s.DeblurEnabled && !s.RtxActive && !s.DnEnabled && !s.CaiEnabled && s.Rotate == 0 && string.IsNullOrWhiteSpace(s.FilterComplex);
                     Info("   Deinterlacing " + (q ? "QTGMC" : "bwdif (QTGMC not installed: forge install qtgmc)") + " — " + (s.Deint == 2 ? "same rate" : "double rate") + ", " + ordTxt);
                     if (plainPath)
                     {
@@ -515,7 +547,7 @@ namespace FFmpegForge.CommandLine
                         string derr; diStage = Qtgmc.Build(job, s, q, out derr);
                         if (diStage == null) { lastErr = derr; return 3; }
                         try { Directory.CreateDirectory(diStage.TempDir); } catch { }
-                        bool more = s.DnEnabled || s.CaiEnabled || s.RtxActive || (s.Vision != null && s.Vision.Enabled) || (s.Seed != null && s.Seed.Enabled);
+                        bool more = s.DnEnabled || s.DeblurEnabled || s.CaiEnabled || s.RtxActive || (s.Vision != null && s.Vision.Enabled) || (s.Seed != null && s.Seed.Enabled) || s.LtxOn;
                         double share = more ? 0.25 : 0.6;
                         code = Rtx.RunDriver(diStage.Plan, p => prog(0, share, p), log, () => cancel, out lastErr);
                         if (code != 0) return code;
@@ -548,6 +580,22 @@ namespace FFmpegForge.CommandLine
                         pBase = st + sh; pScale = 1 - pBase;
                     }
                     else Warn("   Denoiser IA: " + aerr + " — classic denoiser used.");
+                }
+                // ---- 2.0: Deblurring (FocusPulsar, Visual Enhancer)
+                if (s.DeblurEnabled && srcHasPicture && s.Format.Kind != MediaKind.Audio && job.Width > 0 && !cancel)
+                {
+                    string verr; veStage = VeFx.Build(rjob, rs, s.Format.Kind == MediaKind.Image, "focuspulsar", s.DeblurStrength / 100.0, out verr);
+                    if (veStage == null) { lastErr = verr; return 3; }
+                    try { Directory.CreateDirectory(veStage.TempDir); } catch { }
+                    Info("   Deblurring FocusPulsar (Visual Enhancer, strength " + s.DeblurStrength + " %)" + (VeFx.UserPreset("focuspulsar") != null ? "  ·  your preset focuspulsar.json" : ""));
+                    double st = pBase, sh = pScale * (s.Format.Kind == MediaKind.Image ? 0.8 : 0.6);
+                    code = VisionEngine.Run(veStage.Plan, p => prog(st, sh, p), log, () => cancel, out lastErr);
+                    if (code != 0) return code;
+                    if (!File.Exists(veStage.Intermediate)) { lastErr = "FocusPulsar (Visual Enhancer) did not write its result."; return 3; }
+                    rjob = new Job { Path = veStage.Intermediate }; Runner.Probe(rjob);
+                    rs = rs.Clone(); rs.DnEnabled = false; rs.DeblurEnabled = false; rs.TrimStart = -1; rs.TrimEnd = -1;
+                    if (!BuildJobCommand(rjob, rs, outPath, out exe, out args, out expected, out err, out plan, notes)) { lastErr = err; return 3; }
+                    pBase = st + sh; pScale = 1 - pBase;
                 }
                 // ---- Python / ONNX model
                 if (s.CaiEnabled && !string.IsNullOrEmpty(s.CaiModel) && srcHasPicture && s.Format.Kind != MediaKind.Audio && job.Width > 0 && !cancel)
@@ -591,6 +639,13 @@ namespace FFmpegForge.CommandLine
                     if (sp == null) { lastErr = serr; return 3; }
                     Info("   SeedVR2: " + SeedEngine.Short(sp.Script == null ? "" : s.Seed.Model) + "  ·  " + sp.InW + "×" + sp.InH + " → short side " + sp.OutShort);
                     code = SeedEngine.Run(sp, fp, log, () => cancel, out lastErr);
+                }
+                else if (s.LtxOn && s.Format.Kind != MediaKind.Audio)
+                {
+                    string lerr; var lp = LtxEngine.Build(rjob, rs, outPath, out lerr);
+                    if (lp == null) { lastErr = lerr; return 3; }
+                    Info("   " + LtxEngine.Label(s.Ltx) + " (WanGP, profile " + s.Ltx.Profile + ")  ·  " + lp.InW + "×" + lp.InH + " → " + lp.OutW + "×" + lp.OutH);
+                    code = LtxEngine.Run(lp, fp, log, () => cancel, out lastErr);
                 }
                 else if (plan != null)
                 {
@@ -646,7 +701,7 @@ namespace FFmpegForge.CommandLine
             finally
             {
                 if (seqTemp != null) try { if (File.Exists(seqTemp)) File.Delete(seqTemp); } catch { }
-                AiDenoise.Cleanup(aiStage); AiDenoise.Cleanup(caiStage); AiDenoise.Cleanup(diStage);
+                AiDenoise.Cleanup(aiStage); AiDenoise.Cleanup(caiStage); AiDenoise.Cleanup(diStage); VeFx.Cleanup(veStage);
             }
         }
 

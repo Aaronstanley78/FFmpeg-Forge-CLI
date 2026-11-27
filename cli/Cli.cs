@@ -7,19 +7,19 @@ using System.Linq;
 using System.Text;
 
 [assembly: System.Reflection.AssemblyTitle("FFmpeg Forge CLI")]
-[assembly: System.Reflection.AssemblyDescription("Command-line edition of FFmpeg Forge (engine 2.3.0)")]
+[assembly: System.Reflection.AssemblyDescription("Command-line edition of FFmpeg Forge (engine 3.0.1)")]
 [assembly: System.Reflection.AssemblyProduct("FFmpeg Forge CLI")]
-[assembly: System.Reflection.AssemblyVersion("1.0.0.0")]
-[assembly: System.Reflection.AssemblyFileVersion("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersion("1.0.0")]
+[assembly: System.Reflection.AssemblyVersion("2.0.0.0")]
+[assembly: System.Reflection.AssemblyFileVersion("2.0.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersion("2.0.0")]
 
 namespace FFmpegForge.CommandLine
 {
-    /// FFmpeg Forge CLI 1.0 — the conversion engine of FFmpeg Forge 2.3.0 without the window.
+    /// FFmpeg Forge CLI 2.0 — the conversion engine of FFmpeg Forge 3.0.1 without the window.
     public static partial class Cli
     {
-        public const string Version = "1.0.0";
-        public const string EngineVersion = "2.3.0";
+        public const string Version = "2.0.0";
+        public const string EngineVersion = "3.0.1";
         static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
         static bool quiet, noColor, dryRun, verbose;
         static volatile bool cancel;
@@ -94,7 +94,7 @@ namespace FFmpegForge.CommandLine
                 "overwrite", "y", "keep-subs", "normalize", "dry-run", "quiet", "q", "no-color", "verbose", "v", "recursive", "r",
                 "no-gpu-scale", "no-fidelity", "no-444", "optiscaler", "opti-contrast", "denoise-classic", "no-temporal", "no-auto-profile",
                 "cpu", "rtx-hdr", "dlss", "ai-keep-size", "ai-cpu", "ai-fp32", "keep-video", "downmix", "no-chapters", "all", "show-short",
-                "help", "h", "json", "denoise", "rtx-vsr", "seedvr2", "vae-tiled", "offload", "list" };
+                "help", "h", "json", "denoise", "rtx-vsr", "seedvr2", "vae-tiled", "offload", "list", "deblur" };
 
             public static Args Parse(IEnumerable<string> raw)
             {
@@ -205,6 +205,7 @@ namespace FFmpegForge.CommandLine
             }
             LoadForgeSettings();
             string ve = a.Get("ve-dir"); if (ve != null) VisionEngine.Dir = ve;
+            string wg = a.Get("wangp-dir") ?? Environment.GetEnvironmentVariable("FFMPEG_FORGE_WANGP"); if (wg != null) LtxEngine.Dir = wg;
             if (VisionEngine.Resolve(VisionEngine.Dir) == null)
                 foreach (var c in new[] { Path.Combine(AppPaths.AppDir, "Visual Enhancer") }.Concat(VisionEngine.DefaultDirs))
                     if (VisionEngine.Resolve(c) != null) { VisionEngine.Dir = c; break; }

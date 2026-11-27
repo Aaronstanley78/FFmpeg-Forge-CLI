@@ -26,6 +26,7 @@ namespace FFmpegForge.CommandLine
                     else if (k == "vn_builtin_dir") VisionBuiltin.Dir = v;
                     else if (k == "seed_dir" && string.IsNullOrEmpty(SeedEngine.Dir)) SeedEngine.Dir = v;
                     else if (k == "ai_dn_dir") AiDenoise.Dir = v;
+                    else if (k == "ltx_dir" && string.IsNullOrEmpty(LtxEngine.Dir)) LtxEngine.Dir = v;
                 }
             }
             catch { }
@@ -145,7 +146,9 @@ namespace FFmpegForge.CommandLine
             Line("ForgeRTX", Rtx.HasDriver, Rtx.HasDriver ? Rtx.DriverPath : "missing (NVIDIA RTX Video driver engine unavailable)");
             Line("RazorNext", RazorBuiltin.Ready, RazorBuiltin.Status());
             Line("VisionNext", VisionBuiltin.Ready, VisionBuiltin.Status());
-            Line("Visual Enhancer", VisionEngine.Root != null, VisionEngine.Root != null ? VisionEngine.ExePath : "not found (optional, --ve-dir)");
+            Line("OptiPulsar", OptiBuiltin.Ready, OptiBuiltin.Status());
+            Line("LTX 2.5 (WanGP)", LtxEngine.Ready, LtxEngine.Status().Split('\n')[0].Replace("click \"Install WanGP (LTX 2.5)\"", "run  forge install wangp").Replace("choose an existing WanGP folder", "use --wangp-dir FOLDER").Replace("choose the WanGP folder", "use --wangp-dir FOLDER"));
+            Line("Visual Enhancer", VisionEngine.Root != null, VisionEngine.Root != null ? VisionEngine.ExePath + "  (FocusPulsar deblurring, optional engine)" : "not found (needed for --deblur; --ve-dir)");
             Line("SeedVR2", SeedEngine.Script != null && SeedEngine.Python(SeedEngine.Script) != null, SeedEngine.Status().Split('\n')[0]);
             Line("AI denoiser", AiDenoise.Ready, AiDenoise.Ready ? "ready (" + AiDenoise.Root + ")" : "not installed (forge install ai)");
             Line("QTGMC", Qtgmc.Ready, Qtgmc.Ready ? "ready (" + Qtgmc.Root + ")" : "not installed — bwdif is used (forge install qtgmc)");
@@ -186,11 +189,13 @@ namespace FFmpegForge.CommandLine
             switch (what)
             {
                 case "razornext": root = RazorBuiltin.Root; bat = RazorBuiltin.WriteInstaller(root); break;
+                case "optipulsar": root = OptiBuiltin.Root; bat = OptiBuiltin.WriteInstaller(root); OptiBuiltin.SyncHelper(); break;
+                case "wangp": case "ltx": root = LtxEngine.AppFolder(LtxEngine.Dir) != null && LtxEngine.Python(LtxEngine.App) == null ? LtxEngine.Dir : LtxEngine.DefaultInstallDir; bat = LtxEngine.WriteInstaller(root); LtxEngine.SyncHelper(root); break;
                 case "visionnext": root = VisionBuiltin.Root; bat = VisionBuiltin.WriteInstaller(root); break;
                 case "seedvr2": root = !string.IsNullOrEmpty(SeedEngine.Dir) ? SeedEngine.Dir : SeedEngine.DefaultInstallDir; bat = SeedEngine.WriteInstaller(root); break;
                 case "qtgmc": root = Qtgmc.Root; bat = Qtgmc.WriteInstaller(root); break;
                 case "ai": case "denoiser": root = AiDenoise.Root; bat = AiDenoise.WriteInstaller(root); break;
-                default: throw new UsageException("forge install razornext | visionnext | seedvr2 | qtgmc | ai");
+                default: throw new UsageException("forge install razornext | visionnext | optipulsar | wangp | seedvr2 | qtgmc | ai");
             }
             Out("Installing " + what + " in " + root + " (several GB may be downloaded)…", ConsoleColor.White);
             // the batch files end with "pause": feed it a key so the command returns by itself
@@ -206,6 +211,11 @@ namespace FFmpegForge.CommandLine
             if (e.Contains("forgern") || e.Contains("forge_razornext") || e.Contains("relayvsr"))
                 return e.Contains("out of memory") ? "RazorNext ran out of GPU memory: use a smaller source (720p / 1080p) or --upscale-engine ve --memory-budget 8." :
                        e.Contains("no module named") || e.Contains("checkpoint not found") ? "The RazorNext installation is incomplete: forge install razornext" : null;
+            if (e.Contains("forgeop") || e.Contains("forge_optipulsar") || e.Contains("optipulsar model is not installed"))
+                return e.Contains("out of memory") ? "OptiPulsar ran out of GPU memory: use a smaller --upscale-factor or --cpu." : "OptiPulsar: forge install optipulsar";
+            if (e.Contains("forge_ltx25") || e.Contains("wangp"))
+                return e.Contains("out of memory") ? "LTX 2.5 ran out of memory: use --ltx-profile 4.5 or 5, a shorter / smaller source, or --ltx refiner --ltx-factor 1." : "LTX 2.5: forge install wangp  (or --wangp-dir FOLDER)";
+            if (e.Contains("focuspulsar") && e.Contains("ve_cli")) return "FocusPulsar runs through Visual Enhancer: --ve-dir FOLDER (the one with VE_CLI.exe), and download the model in Visual Enhancer.";
             if (e.Contains("visionnext model is not installed")) return "forge install visionnext";
             if (e.Contains("razornext model is not installed")) return "forge install razornext";
             if (e.Contains("out of memory") || e.Contains("outofmemory")) return "The GPU ran out of memory: lower the resolution / model size (SeedVR2: --seed-model with fp8 or GGUF, --blockswap, --vae-tiled).";
@@ -233,7 +243,7 @@ namespace FFmpegForge.CommandLine
         }
 
         const string HelpMain =
-@"FFmpeg Forge CLI 1.0 — the FFmpeg Forge 2.3.0 engine on the command line
+@"FFmpeg Forge CLI 2.0 — the FFmpeg Forge 3.0.1 engine on the command line
 
 USAGE
   forge <command> [options]
@@ -250,7 +260,7 @@ COMMANDS
   denoise-presets        --denoise-preset values
   layouts                --channels values (5.1, 7.1.4 Atmos beds, spatial headphones…)
   status                 FFmpeg, GPU features, AI engines installed
-  install ENGINE         razornext | visionnext | seedvr2 | qtgmc | ai   (Windows)
+  install ENGINE         razornext | visionnext | optipulsar | wangp | seedvr2 | qtgmc | ai   (Windows)
   version                version of the CLI and of FFmpeg
 
 GLOBAL OPTIONS
@@ -258,6 +268,8 @@ GLOBAL OPTIONS
                          then C:\FFmpeg\bin, then PATH
   --forge-dir FOLDER     use the AI engines / models / settings of a FFmpeg Forge folder
                          (e.g. D:\FFmpeg). Environment: FFMPEG_FORGE_DIR
+  --ve-dir FOLDER        Visual Enhancer folder (VE_CLI.exe): --deblur, --upscale-engine ve
+  --wangp-dir FOLDER     existing WanGP folder for --ltx. Environment: FFMPEG_FORGE_WANGP
   --dry-run              print the commands, convert nothing
   -q, --quiet            only results and errors       -v, --verbose   every FFmpeg line
   --no-color             plain text output (also NO_COLOR=1)
@@ -269,6 +281,9 @@ EXAMPLES
   forge convert ""D:\Videos"" -r -f mp4 --vcodec h265 --quality high -o ""D:\Out""
   forge clip.mp4 --scale fsr --scale-factor 2 --denoise
   forge old.avi --deinterlace double --upscale razornext --upscale-factor 2 -f mkv
+  forge clip.mp4 --upscale optipulsar --upscale-factor 4 -f mp4
+  forge soft.mp4 --deblur --deblur-strength 120 --upscale optipulsar
+  forge draft.mp4 --ltx refiner --ltx-factor 1.5 --ltx-profile 4
   forge song.flac -f mp3 --abitrate 320
   forge concert.mkv -f mkv --channels 7.1.4 --upmix spatial
   forge rip E:\ --format mkv
@@ -315,6 +330,8 @@ SCALE / OPTISCALER
   --scale-factor X       1.5 2 2.5 3 4, or res (= --resolution)     --sharpness 0-100
   --no-gpu-scale  --no-fidelity  --no-444
   --optiscaler  --opti-mult 1.25-3  --opti-kernel 1-7  --opti-sharpness 0-100  --opti-contrast
+DEBLURRING (FocusPulsar, through Visual Enhancer)
+  --deblur               AI deblurring / focus restoration      --deblur-strength 0-200 (default 100)
 DENOISER
   --denoise              AI denoiser when installed (SCUNet…), else the classic Neat Video-style one
   --denoise-classic      always the classic denoiser       --denoise-ai MODEL  (scunet or models\*.pth)
@@ -323,10 +340,15 @@ DENOISER
 HDR
   --hdr hdr10|dv         SDR → HDR10 / Dolby Vision 8.1        --hdr-peak 600|1000|1500|2000|4000
 AI UPSCALE
-  --upscale razornext|visionnext   --upscale-factor N   --upscale-engine builtin|ve
+  --upscale razornext|visionnext|optipulsar   --upscale-factor N   --upscale-engine builtin|ve
+                         optipulsar: x1 x2 x4 x8 (NERVE, built in: forge install optipulsar)
   --cpu  --tile 256|512  --memory-budget auto|unlimited|12|8|6  --ve-dir FOLDER
   --seedvr2  --seed-model FILE  --seed-size 0-8  --seed-batch N  --blockswap N  --vae-tiled  --offload
   --ai-model FILE        your Python / ONNX model    --ai-keep-size --ai-cpu --ai-fp32 --ai-tile N
+LTX 2.5 UPSCALE (WanGP Video Postprocessing)
+  --ltx upscaler|refiner     Pixel Spatial Upscaler x2, or Detail Refiner x1 / x1.5 / x2
+  --ltx-factor 1|1.5|2   --ltx-prompt ""TEXT""   --ltx-profile 4|4.5|5|3|2|1   --ltx-attention sdpa|sage|sage2|flash
+  --ltx-seed N           (forge install wangp, or --wangp-dir FOLDER)
 NVIDIA RTX
   --rtx-vsr  --vsr-quality 1-4  --vsr-scale 1-4  --rtx-hdr  --dlss  --rtx-engine auto|native|driver|processor
 COVER

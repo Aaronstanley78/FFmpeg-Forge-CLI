@@ -242,6 +242,7 @@ namespace FFmpegForge
             bool srcVideo = job.Kind == MediaKind.Video || CommandBuilder.IsAnimatedImageSource(job);
             if (image && srcVideo) { error = "SeedVR2 + Image output works on pictures. For a video, choose the Video category."; return null; }
             if (s.Vision != null && s.Vision.Enabled) { error = "Tick only one AI upscaler: SeedVR2 or Upscale " + s.Vision.Name + "."; return null; }
+            if (s.LtxOn) { error = "Tick only one AI upscaler: SeedVR2 or LTX 2.5 Upscale."; return null; }
             if (s.ScaleActive) { error = "SeedVR2 is an upscaler too: untick \"Scale\" / OptiScaler (SeedVR2 sets the size itself)."; return null; }
             if (s.RtxActive) { error = "Untick the NVIDIA RTX AI options (VSR / TrueHDR / DLSS) to use SeedVR2."; return null; }
             if (!string.IsNullOrWhiteSpace(s.FilterComplex)) { error = "The advanced filtergraph cannot be combined with SeedVR2. Use the filter chain instead."; return null; }

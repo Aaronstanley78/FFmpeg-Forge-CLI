@@ -16,7 +16,8 @@ namespace FFmpegForge
         public string Model = "visionnext";     // "visionnext" (VOSR 2.0) or "razornext" (RelayVSR, 2.2.0)
         public string MemBudget = "auto";       // RazorNext with Visual Enhancer: --memory-budget auto|unlimited|12|8|6
         public bool Razor { get { return Model == "razornext"; } }
-        public string Name { get { return Razor ? "RazorNext" : "VisionNext"; } }
+        public string Name { get { return VeFx.ModelName(Model); } }   // 3.0.1: VisionNext, RazorNext, OptiPulsar
+        public bool Opti { get { return Model == "optipulsar"; } }
         public int Scale = 2;        // 1 or 2
         public int Tile = 512;       // 256 or 512
         public int Engine;           // 0 = built-in VOSR 2.0 (no Visual Enhancer), 1 = Visual Enhancer (VE_CLI.exe)
@@ -163,7 +164,8 @@ namespace FFmpegForge
     {
         public static string Dir = "";
         public static readonly string[] DefaultDirs = { @"F:\Nouveau dossier", @"C:\Program Files\Visual Enhancer", @"C:\Visual Enhancer" };
-        public static readonly string[] Models = { "VisionNext", "RazorNext" };
+        public static readonly string[] Models = { "VisionNext", "RazorNext", "OptiPulsar" };
+        public static readonly string[] ModelKeys = { "visionnext", "razornext", "optipulsar" };
         public static readonly string[] MemBudgets = { "auto", "unlimited", "12", "8", "6" };
         public static readonly int[] Scales = { 1, 2 };
         public static readonly int[] Tiles = { 256, 512 };
@@ -285,19 +287,22 @@ namespace FFmpegForge
             error = null;
             var v = s.Vision;
             var fmt = s.Format;
+            bool opti = v.Opti;
             bool builtin = v.Engine == 0;
             bool razor = v.Razor;
             string nm = v.Name;
-            string exe = builtin ? (razor ? RazorBuiltin.Python : VisionBuiltin.Python) : ExePath;
+            string exe = builtin ? (razor ? RazorBuiltin.Python : opti ? OptiBuiltin.Python : VisionBuiltin.Python) : ExePath;
+            if (builtin && opti && !OptiBuiltin.Ready) { error = "The OptiPulsar model is not installed: in the AI Upscale section (Model: OptiPulsar) click \"Install OptiPulsar model\" (no Visual Enhancer needed)."; return null; }
             if (builtin && razor && !RazorBuiltin.Ready) { error = "The RazorNext model is not installed: in the AI Upscale section (Model: RazorNext) click \"Install RazorNext model\" (no Visual Enhancer needed)."; return null; }
-            if (builtin && !razor && !VisionBuiltin.Ready) { error = "The VisionNext model is not installed: in the AI Upscale section (Model: VisionNext) click \"Install VisionNext model\" (no Visual Enhancer needed)."; return null; }
+            if (builtin && !razor && !opti && !VisionBuiltin.Ready) { error = "The VisionNext model is not installed: in the AI Upscale section (Model: VisionNext) click \"Install VisionNext model\" (no Visual Enhancer needed)."; return null; }
             if (!builtin && exe == null) { error = "Upscale " + nm + " with Visual Enhancer: choose the folder that contains VE_CLI.exe (AI Upscale → Visual Enhancer folder…)." + (string.IsNullOrEmpty(Dir) ? "" : " Current folder: " + Dir); return null; }
-            if (!builtin && !razor && !RuntimeInstalled) { error = "The VisionNext runtime of Visual Enhancer is missing (bin\\runtime\\visionnext): update Visual Enhancer."; return null; }
+            if (!builtin && !razor && !opti && !RuntimeInstalled) { error = "The VisionNext runtime of Visual Enhancer is missing (bin\\runtime\\visionnext): update Visual Enhancer."; return null; }
             if (job.Kind == MediaKind.Audio || fmt.Kind == MediaKind.Audio) { error = "Upscale " + nm + " needs a video or a picture."; return null; }
             bool image = fmt.Kind == MediaKind.Image;
             bool srcVideo = job.Kind == MediaKind.Video || CommandBuilder.IsAnimatedImageSource(job);
             if (image && srcVideo) { error = "Upscale " + nm + " + Image output works on pictures. For a video, choose the Video category."; return null; }
             if (s.Seed != null && s.Seed.Enabled) { error = "Tick only one AI upscaler: SeedVR2 or Upscale " + nm + "."; return null; }
+            if (s.LtxOn) { error = "Tick only one AI upscaler: LTX 2.5 Upscale or Upscale " + nm + "."; return null; }
             if (s.ScaleActive) { error = "Upscale " + nm + " is an upscaler too: untick \"Scale\" / OptiScaler."; return null; }
             if (s.RtxActive) { error = "Untick the NVIDIA RTX AI options (VSR / TrueHDR / DLSS) to use Upscale " + nm + "."; return null; }
             if (!string.IsNullOrWhiteSpace(s.FilterComplex)) { error = "The advanced filtergraph cannot be combined with Upscale " + nm + ". Use the filter chain instead."; return null; }
@@ -311,7 +316,13 @@ namespace FFmpegForge
             if (w < 16 || h < 16) { error = "Could not read the picture size (ffprobe). Re-add the file."; return null; }
             if (s.Rotate == 1 || s.Rotate == 3) { int t = w; w = h; h = t; }
             int scale;
-            if (razor)
+            if (opti)
+            {
+                // OptiPulsar (NERVE, built-in or Visual Enhancer): ×1, ×2, ×4, ×8 (native ×2 and ×4)
+                scale = v.Scale == 1 || v.Scale == 2 || v.Scale == 4 || v.Scale == 8 ? v.Scale : 0;
+                if (scale == 0) { error = nm + " (Visual Enhancer) upscales ×1, ×2, ×4 or ×8: pick one of these factors."; return null; }
+            }
+            else if (razor)
             {
                 // RelayVSR is native ×4. Built-in: ×1 / ×2 / ×3 / ×4. Visual Enhancer's RazorNext: ×1 / ×2 / ×4 / ×8.
                 scale = v.Scale == 1 || v.Scale == 2 || v.Scale == 3 || v.Scale == 4 || v.Scale == 8 ? v.Scale : 4;
@@ -329,8 +340,9 @@ namespace FFmpegForge
             { error = "The " + nm + " output (" + (w * scale) + "×" + (h * scale) + ") is too large for " + vkey + " (max " + (vkey.Contains("264") ? "4096" : "8192") + " px): choose H.265 / libx264 / libx265 or a smaller upscale factor."; return null; }
             if (w * scale > 16384 || h * scale > 16384) { error = "The " + nm + " output would be larger than 16384 pixels: use a smaller upscale factor."; return null; }
 
-            var p = new Plan { Exe = exe, Builtin = builtin, Name = nm, WorkDir = builtin ? (razor ? RazorBuiltin.AppDir : VisionBuiltin.AppDir) : Path.GetDirectoryName(exe), Output = outPath, InW = w, InH = h, OutW = w * scale, OutH = h * scale, Video = !image };
-            p.TempDir = Path.Combine(Path.GetTempPath(), "FFmpegForge-" + nm + "-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            var p = new Plan { Exe = exe, Builtin = builtin, Name = nm.Replace(" ", ""), WorkDir = builtin ? (razor ? RazorBuiltin.AppDir : opti ? OptiBuiltin.Root : VisionBuiltin.AppDir) : Path.GetDirectoryName(exe), Output = outPath, InW = w, InH = h, OutW = w * scale, OutH = h * scale, Video = !image };
+            p.TempDir = Path.Combine(Path.GetTempPath(), "FFmpegForge-" + nm.Replace(" ", "") + "-" + Guid.NewGuid().ToString("N").Substring(0, 8));
+            p.Name = nm;
 
             // 1) pre-pass: trim, rotation, Denoiser, user filters -> PNG picture(s)
             int fn = job.FpsNum > 0 ? job.FpsNum : 30, fd = job.FpsDen > 0 ? job.FpsDen : 1;
@@ -369,9 +381,13 @@ namespace FFmpegForge
             }
 
             // 2) VE_CLI upscale with VisionNext / RazorNext
-            string veModel = razor ? "--engine razornext --scale " + scale + " --memory-budget " + mem + " --format png"
+            string veModel = opti ? VeFx.UpscaleArgs(v.Model, scale, null) : razor ? "--engine razornext --scale " + scale + " --memory-budget " + mem + " --format png"
                                    : "--engine visionnext --model " + (string.IsNullOrEmpty(v.Model) ? "visionnext" : v.Model) + " --scale " + scale + " --tile " + tile + " --format png";
-            if (builtin && razor)
+            if (builtin && opti)
+            {
+                p.VeArgs = "-u forge_optipulsar.py -w " + w + " -h " + h + " -u " + scale;    // streamed by MakeDriver below
+            }
+            else if (builtin && razor)
             {
                 // RelayVSR streaming helper (always used through MakeDriver below): raw frames in, raw frames out
                 p.VeArgs = "-u forge_razornext.py -w " + w + " -h " + h + " -u " + scale;
@@ -452,6 +468,19 @@ namespace FFmpegForge
         /// no picture files and a single encode, with the same per-frame result as the official inference script.
         static void MakeDriver(Plan p, string dec, string enc, VisionSettings v, int scale, int tile, double seconds)
         {
+            if (v.Opti)
+            {
+                // OptiPulsar (NERVE): decoder -> forge_optipulsar.py -> final encoder
+                OptiBuiltin.SyncHelper();
+                p.Driver = new Rtx.DriverPlan
+                {
+                    W = p.InW, H = p.InH, OW = p.OutW, OH = p.OutH, Expected = seconds, Helper = OptiBuiltin.Python, HelperName = "ForgeOP",
+                    DecArgs = dec, EncArgs = enc,
+                    HelperArgs = "-u " + Q(OptiBuiltin.Helper) + " -w " + p.InW + " -h " + p.InH + " -u " + scale + " -device " + (v.UseGpu ? "cuda" : "cpu") +
+                                 " -m2 " + Q(OptiBuiltin.Model2x) + " -m4 " + Q(OptiBuiltin.Model4x)
+                };
+                return;
+            }
             if (v.Razor)
             {
                 // RazorNext (RelayVSR): decoder -> forge_razornext.py (temporal streaming 4× VSR) -> final encoder
